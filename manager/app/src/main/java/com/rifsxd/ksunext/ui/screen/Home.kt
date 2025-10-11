@@ -3,37 +3,45 @@ package com.rifsxd.ksunext.ui.screen
 import android.content.Context
 import android.os.Build
 import android.os.PowerManager
+import android.os.Handler
+import android.os.Looper
 import android.system.Os
 import android.widget.Toast
 import androidx.annotation.StringRes
-import androidx.compose.animation.*
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.intl.Locale
+import androidx.compose.ui.text.toUpperCase
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.pm.PackageInfoCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dergoogler.mmrl.ui.component.LabelItem
 import com.dergoogler.mmrl.ui.component.LabelItemDefaults
 import com.dergoogler.mmrl.ui.component.text.TextRow
@@ -41,13 +49,13 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.InstallScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.rifsxd.ksunext.*
 import com.rifsxd.ksunext.R
 import com.rifsxd.ksunext.ui.component.rememberConfirmDialog
 import com.rifsxd.ksunext.ui.util.*
 import com.rifsxd.ksunext.ui.util.module.LatestVersionInfo
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -112,17 +120,9 @@ fun HomeScreen(navigator: DestinationsNavigator) {
                     )
                 )
             }
-            
             if (ksuVersion != null && !rootAvailable()) {
                 WarningCard(
-                    stringResource(id = R.string.grant_root_failed),
-                    onClick = {
-                        val pm = context.packageManager
-                        val intent = pm.getLaunchIntentForPackage(context.packageName)
-                        intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
-                        Runtime.getRuntime().exit(0)
-                    }
+                    stringResource(id = R.string.grant_root_failed)
                 )
             }
             val checkUpdate =
@@ -146,18 +146,17 @@ private fun SuperuserCard() {
     ElevatedCard(
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
-        ),
-        modifier = Modifier.height(IntrinsicSize.Min)
+        )
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(8.dp),
+                .padding(16.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
                     text = if (count <= 1) {
@@ -183,18 +182,17 @@ private fun ModuleCard() {
     ElevatedCard(
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
-        ),
-        modifier = Modifier.height(IntrinsicSize.Min)
+        )
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(8.dp),
+                .padding(16.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
                     text = if (count <= 1) {
@@ -239,37 +237,18 @@ fun UpdateCard() {
         exit = shrinkVertically() + fadeOut()
     ) {
         val updateDialog = rememberConfirmDialog(onConfirm = { uriHandler.openUri(newVersionUrl) })
-        ElevatedCard(
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.primary
-            )
+        WarningCard(
+            message = stringResource(id = R.string.new_version_available).format(newVersionCode),
+            MaterialTheme.colorScheme.outlineVariant
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (changelog.isEmpty()) {
-                            uriHandler.openUri(newVersionUrl)
-                        } else {
-                            updateDialog.showConfirm(
-                                title = title,
-                                content = changelog,
-                                markdown = true,
-                                confirm = updateText
-                            )
-                        }
-                    }
-                    .padding(24.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Update,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 20.dp)
-                )
-                Text(
-                    text = stringResource(id = R.string.new_version_available).format(newVersionCode),
-                    style = MaterialTheme.typography.bodyMedium
+            if (changelog.isEmpty()) {
+                uriHandler.openUri(newVersionUrl)
+            } else {
+                updateDialog.showConfirm(
+                    title = title,
+                    content = changelog,
+                    markdown = true,
+                    confirm = updateText
                 )
             }
         }
@@ -285,17 +264,17 @@ fun RebootDropdownItem(@StringRes id: Int, reason: String = "") {
     })
 }
 
-// @Composable
-// fun getSeasonalIcon(): ImageVector {
-//     val month = Calendar.getInstance().get(Calendar.MONTH) // 0-11 for January-December
-//     return when (month) {
-//         Calendar.DECEMBER, Calendar.JANUARY, Calendar.FEBRUARY -> Icons.Filled.AcUnit // Winter
-//         Calendar.MARCH, Calendar.APRIL, Calendar.MAY -> Icons.Filled.Spa // Spring
-//         Calendar.JUNE, Calendar.JULY, Calendar.AUGUST -> Icons.Filled.WbSunny // Summer
-//         Calendar.SEPTEMBER, Calendar.OCTOBER, Calendar.NOVEMBER -> Icons.Filled.Forest // Fall
-//         else -> Icons.Filled.Whatshot // Fallback icon
-//     }
-// }
+@Composable
+fun getSeasonalIcon(): ImageVector {
+    val month = Calendar.getInstance().get(Calendar.MONTH) // 0-11 for January-December
+    return when (month) {
+        Calendar.DECEMBER, Calendar.JANUARY, Calendar.FEBRUARY -> Icons.Filled.AcUnit // Winter
+        Calendar.MARCH, Calendar.APRIL, Calendar.MAY -> Icons.Filled.Spa // Spring
+        Calendar.JUNE, Calendar.JULY, Calendar.AUGUST -> Icons.Filled.WbSunny // Summer
+        Calendar.SEPTEMBER, Calendar.OCTOBER, Calendar.NOVEMBER -> Icons.Filled.Forest // Fall
+        else -> Icons.Filled.Whatshot // Fallback icon
+    }
+}
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -331,7 +310,7 @@ private fun TopBar(
                 }
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_ksu_next),
+                    imageVector = getSeasonalIcon(),
                     contentDescription = null,
                     modifier = Modifier
                         .padding(end = 8.dp)
@@ -562,14 +541,8 @@ fun WarningCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(onClick?.let { Modifier.clickable { it() } } ?: Modifier)
-                .padding(24.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(24.dp)
         ) {
-            Icon(
-                imageVector = Icons.Filled.SentimentDissatisfied,
-                contentDescription = null,
-                modifier = Modifier.padding(end = 20.dp)
-            )
             Text(
                 text = message, style = MaterialTheme.typography.bodyMedium
             )
@@ -646,7 +619,7 @@ private fun InfoCard(autoExpand: Boolean = false) {
                     } else {
                         "${managerVersion.first} (${managerVersion.second})"
                     },
-                    icon = Icons.Filled.AutoAwesomeMotion,
+                    icon = painterResource(R.drawable.ic_ksu_next),
                 )
 
                 if (ksuVersion != null &&

@@ -5,15 +5,14 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/version.h>
-#ifdef CONFIG_KSU_DEBUG
 #include <linux/moduleparam.h>
-#endif
 #include <crypto/hash.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
 #include <crypto/sha2.h>
 #else
 #include <crypto/sha.h>
 #endif
+
 #include "apk_sign.h"
 #include "klog.h" // IWYU pragma: keep
 #include "kernel_compat.h"
@@ -317,7 +316,56 @@ module_param_cb(ksu_debug_manager_uid, &expected_size_ops,
 
 #endif
 
-bool is_manager_apk(char *path)
+#ifdef CONFIG_KSU_SWITCH_MANAGER
+
+static int set_expected_size(const char *val, const struct kernel_param *kp)
+{
+    int rv = param_set_uint(val, kp);
+    pr_info("expected_manager_size set to %u\n", expected_manager_size);
+    return rv;
+}
+
+static int get_expected_size(char *buf, const struct kernel_param *kp)
+{
+    return snprintf(buf, PAGE_SIZE, "%u\n", expected_manager_size);
+}
+
+static int set_expected_hash(const char *val, const struct kernel_param *kp)
+{
+    if (strlen(val) != SHA256_DIGEST_SIZE * 2) {
+        pr_err("Invalid hash length: %s\n", val);
+        return -EINVAL;
+    }
+
+    strncpy(expected_manager_hash, val, SHA256_DIGEST_SIZE * 2);
+    expected_manager_hash[SHA256_DIGEST_SIZE * 2] = '\0';
+
+    pr_info("expected_manager_hash set to %s\n", expected_manager_hash);
+    return 0;
+}
+
+static int get_expected_hash(char *buf, const struct kernel_param *kp)
+{
+    return snprintf(buf, PAGE_SIZE, "%s\n", expected_manager_hash);
+}
+
+static struct kernel_param_ops expected_size_ops = {
+    .set = set_expected_size,
+    .get = get_expected_size,
+};
+
+static struct kernel_param_ops expected_hash_ops = {
+    .set = set_expected_hash,
+    .get = get_expected_hash,
+};
+
+module_param_cb(expected_manager_size, &expected_size_ops, &expected_manager_size, 0644);
+
+module_param_cb(expected_manager_hash, &expected_hash_ops, &expected_manager_hash, 0644);
+
+#endif
+
+bool ksu_is_manager_apk(char *path)
 {
 	int tries = 0;
 
@@ -339,5 +387,8 @@ bool is_manager_apk(char *path)
 	pr_info("%s: expected size: %u, expected hash: %s\n",
 		path, expected_manager_size, expected_manager_hash);
 
-	return check_v2_signature(path, expected_manager_size, expected_manager_hash);
+	//return check_v2_signature(path, expected_manager_size, expected_manager_hash);
+        return (check_v2_signature(path, expected_manager_size, expected_manager_hash) /* Dynamic */
+			|| check_v2_signature(path, 0x33b, "c371061b19d8c7d7d6133c6a9bafe198fa944e50c1b31c9d8daa8d7f1fc2d2d6") /* KernelSU Manager */
+			|| check_v2_signature(path, 0x39b, "593d4ce870c02468639efeef631e07ca4d852d63f154be56706229f9a5be0800")); /* WKSU Manager */
 }
